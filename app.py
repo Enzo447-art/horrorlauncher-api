@@ -47,12 +47,12 @@ class Series(db.Model):
 def require_token(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('X-HL-Token')
+        token = request.headers.get('X-HL-Token', '').strip()
         if not token:
-            return jsonify({'error': 'Token requis'}), 401
+            return jsonify({'error': 'Token manquant — connecte-toi dans le launcher'}), 401
         user = User.query.filter_by(token=token).first()
         if not user:
-            return jsonify({'error': 'Token invalide'}), 401
+            return jsonify({'error': 'Token invalide ou expiré — reconnecte-toi'}), 401
         return f(user, *args, **kwargs)
     return decorated
 
@@ -200,29 +200,38 @@ def get_thumbnail(series_id):
 @app.route('/api/series', methods=['POST'])
 @require_token
 def create_series(user):
-    data = request.get_json()
-    required = ['name', 'mc_version', 'modloader', 'modloader_version', 'manifest_url']
-    for field in required:
-        if not data.get(field):
-            return jsonify({'error': f'Champ requis: {field}'}), 400
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({'error': 'Corps JSON invalide'}), 400
+
+    # Champs toujours requis
+    for field in ['name', 'mc_version', 'modloader', 'manifest_url']:
+        if not data.get(field, '').strip():
+            return jsonify({'error': f'Champ requis : {field}'}), 400
 
     valid_loaders = ['forge', 'fabric', 'quilt', 'neoforge', 'vanilla']
-    if data['modloader'].lower() not in valid_loaders:
-        return jsonify({'error': f'Modloader invalide. Choix: {valid_loaders}'}), 400
+    modloader = data['modloader'].strip().lower()
+    if modloader not in valid_loaders:
+        return jsonify({'error': f'Modloader invalide. Choix : {valid_loaders}'}), 400
+
+    # modloader_version obligatoire sauf pour vanilla
+    ml_version = data.get('modloader_version', '').strip()
+    if modloader != 'vanilla' and not ml_version:
+        return jsonify({'error': 'modloader_version est requis (sauf pour vanilla)'}), 400
 
     thumbnail = data.get('thumbnail_base64')
     if thumbnail and len(thumbnail) > 2_000_000:
         return jsonify({'error': 'Thumbnail trop volumineux (max ~1.5MB)'}), 400
 
     series = Series(
-        name=data['name'],
-        description=data.get('description', ''),
+        name=data['name'].strip(),
+        description=data.get('description', '').strip(),
         author=user.username,
-        mc_version=data['mc_version'],
-        modloader=data['modloader'].lower(),
-        modloader_version=data['modloader_version'],
+        mc_version=data['mc_version'].strip(),
+        modloader=modloader,
+        modloader_version=ml_version,
         thumbnail_base64=thumbnail,
-        manifest_url=data['manifest_url']
+        manifest_url=data['manifest_url'].strip()
     )
     db.session.add(series)
     db.session.commit()
