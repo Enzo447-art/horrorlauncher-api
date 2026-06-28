@@ -318,6 +318,34 @@ def has_joined():
 def join_server():
     return '', 204
 
+
+# ─── CUSTOM SKIN LOADER API ───────────────────────────────────────────────────
+# Endpoints compatibles CustomSkinLoader "CustomSkinAPI" type
+
+@app.route('/csl/<username>.json', methods=['GET'])
+def csl_profile(username):
+    """CustomSkinLoader demande /csl/<username>.json"""
+    import base64 as b64
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({}), 404
+    result = {'username': user.username}
+    if user.skin_base64:
+        result['skin'] = f"https://horrorlauncher-api-1.onrender.com/csl/skin/{username}.png"
+        result['model'] = 'default'
+    return jsonify(result)
+
+@app.route('/csl/skin/<username>.png', methods=['GET'])
+def csl_skin_png(username):
+    """Sert le PNG du skin pour CustomSkinLoader"""
+    from flask import Response
+    import base64 as b64
+    user = User.query.filter_by(username=username).first()
+    if not user or not user.skin_base64:
+        return jsonify({'error': 'Pas de skin'}), 404
+    return Response(b64.b64decode(user.skin_base64), mimetype='image/png',
+                    headers={'Cache-Control': 'no-cache'})
+
 # ─── HEALTH ───────────────────────────────────────────────────────────────────
 
 @app.route('/api/health', methods=['GET'])
