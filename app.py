@@ -266,6 +266,58 @@ def validate_token():
     })
 
 
+
+# ─── ENDPOINTS SESSION MINECRAFT ─────────────────────────────────────────────
+
+@app.route('/session/minecraft/profile/<user_uuid>', methods=['GET'])
+def mc_profile(user_uuid):
+    import base64 as b64, json as js
+    user = User.query.filter_by(uuid=user_uuid).first()
+    if not user:
+        return jsonify({'error': 'Profile not found'}), 404
+    textures = {'textures': {}}
+    if user.skin_base64:
+        skin_url = f"https://horrorlauncher-api-1.onrender.com/api/skin/{user_uuid}/raw"
+        textures['textures']['SKIN'] = {'url': skin_url}
+    textures_b64 = b64.b64encode(js.dumps(textures).encode()).decode()
+    return jsonify({
+        'id': user_uuid.replace('-', ''),
+        'name': user.username,
+        'properties': [{'name': 'textures', 'value': textures_b64}]
+    })
+
+@app.route('/api/skin/<user_uuid>/raw', methods=['GET'])
+def get_skin_raw(user_uuid):
+    from flask import Response
+    import base64 as b64
+    user = User.query.filter_by(uuid=user_uuid).first()
+    if not user or not user.skin_base64:
+        return jsonify({'error': 'Pas de skin'}), 404
+    return Response(b64.b64decode(user.skin_base64), mimetype='image/png',
+                    headers={'Cache-Control': 'no-cache'})
+
+@app.route('/session/minecraft/hasJoined', methods=['GET'])
+def has_joined():
+    import base64 as b64, json as js
+    username = request.args.get('username', '')
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return '', 204
+    textures = {'textures': {}}
+    if user.skin_base64:
+        skin_url = f"https://horrorlauncher-api-1.onrender.com/api/skin/{user.uuid}/raw"
+        textures['textures']['SKIN'] = {'url': skin_url}
+    textures_b64 = b64.b64encode(js.dumps(textures).encode()).decode()
+    return jsonify({
+        'id': user.uuid.replace('-', ''),
+        'name': user.username,
+        'properties': [{'name': 'textures', 'value': textures_b64}]
+    })
+
+@app.route('/session/minecraft/join', methods=['POST'])
+def join_server():
+    return '', 204
+
 # ─── HEALTH ───────────────────────────────────────────────────────────────────
 
 @app.route('/api/health', methods=['GET'])
